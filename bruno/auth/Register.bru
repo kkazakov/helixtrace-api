@@ -1,0 +1,44 @@
+meta {
+  name: Register
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "email": "{{email}}",
+    "password": "{{password}}",
+    "username": "{{username}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body.token) {
+    bru.setVar("auth_token", res.body.token);
+    console.log("Token saved to collection var auth_token:", res.body.token);
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  
+  test("token is present and non-empty", function() {
+    expect(res.body.token).to.be.a("string").and.to.have.length.greaterThan(0);
+  });
+  
+  test("email returned matches registration", function() {
+    expect(res.body.email).to.equal(req.body.email);
+  });
+  
+  test("username returned matches registration", function() {
+    expect(res.body.username).to.equal(req.body.username);
+  });
+}
