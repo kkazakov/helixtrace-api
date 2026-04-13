@@ -18,10 +18,6 @@ body:json {
   }
 }
 
-vars:pre-request {
-  username: wasp
-}
-
 script:post-response {
   if (res.status === 201 && res.body.token) {
     bru.setVar("auth_token", res.body.token);

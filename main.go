@@ -46,6 +46,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	authHandler := &handlers.AuthHandler{Conn: conn}
+	tracePathHandler := &handlers.TracePathHandler{Conn: conn, Cfg: cfg}
 
 	r.Post("/api/login", authHandler.Login)
 	r.Post("/api/register", authHandler.Register)
@@ -65,6 +66,8 @@ func main() {
 			email, _ := authmiddleware.EmailFromContext(r.Context())
 			handlers.WriteJSON(w, http.StatusOK, map[string]string{"email": email})
 		})
+
+		r.Get("/api/trace-path", tracePathHandler.TracePath)
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.APIHost, cfg.APIPort)
