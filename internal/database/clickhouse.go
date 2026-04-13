@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/wasp/helixtrace-api/internal/config"
@@ -47,8 +48,16 @@ func InitDB(conn clickhouse.Conn, sqlDir string) error {
 			return fmt.Errorf("failed to read %s: %w", f, err)
 		}
 
-		if err := conn.Exec(context.Background(), string(content)); err != nil {
-			return fmt.Errorf("failed to execute %s: %w", f, err)
+		statements := strings.Split(string(content), ";")
+		for _, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" || strings.HasPrefix(stmt, "--") {
+				continue
+			}
+
+			if err := conn.Exec(context.Background(), stmt); err != nil {
+				return fmt.Errorf("failed to execute %s: %w", f, err)
+			}
 		}
 	}
 
