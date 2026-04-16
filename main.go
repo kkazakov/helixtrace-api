@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/wasp/helixtrace-api/internal/config"
 	"github.com/wasp/helixtrace-api/internal/database"
 	"github.com/wasp/helixtrace-api/internal/handlers"
@@ -44,6 +45,15 @@ func main() {
 
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	if len(cfg.CorsAllowedOrigins) > 0 {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins: cfg.CorsAllowedOrigins,
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+			MaxAge:         300,
+		}))
+	}
 
 	authHandler := &handlers.AuthHandler{Conn: conn}
 	tracePathHandler := &handlers.TracePathHandler{Conn: conn, Cfg: cfg}

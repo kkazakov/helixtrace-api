@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,7 @@ type Config struct {
 	ClickHousePassword       string
 	APIHost                  string
 	APIPort                  int
+	CorsAllowedOrigins       []string
 	Debug                    bool
 }
 
@@ -40,6 +42,7 @@ func Load() (*Config, error) {
 		ClickHousePassword:       getEnv("CLICKHOUSE_PASSWORD", ""),
 		APIHost:                  getEnv("API_HOST", "0.0.0.0"),
 		APIPort:                  apiPort,
+		CorsAllowedOrigins:       parseCorsOrigins(getEnv("CORS_ALLOWED_ORIGINS", "")),
 		Debug:                    getEnv("DEBUG", "false") == "true",
 	}, nil
 }
@@ -49,4 +52,18 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func parseCorsOrigins(value string) []string {
+	if value == "" {
+		return nil
+	}
+	var origins []string
+	for _, origin := range strings.Split(value, ",") {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	return origins
 }
