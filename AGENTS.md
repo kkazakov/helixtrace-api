@@ -75,7 +75,7 @@
 | `updated_at` | DateTime64 | Delta, ZSTD(1) | Row version for ReplacingMergeTree |
 
 ### Behavior
-- **Create** — validates `category_id` exists, generates UUID, inserts row
+- **Create** — validates `category_id` exists, fetches elevation from OpenTopoData API using lat/lon, generates UUID, inserts row
 - **Update** — partial update via re-insert (ReplacingMergeTree pattern); only provided fields change
 - **Delete** — soft delete via re-insert with `deleted=true`; filtered out on reads
 - **List** — returns user's points; `?include_public=true` adds other users' public points

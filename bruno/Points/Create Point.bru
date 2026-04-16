@@ -14,7 +14,6 @@ body:json {
   {
     "lat": 42.6977,
     "lon": 23.3219,
-    "elevation": 550.5,
     "public": false,
     "label": "Sofia office",
     "category_id": 1
@@ -37,6 +36,14 @@ tests {
   test("lat/lon match request", function() {
     expect(res.body.lat).to.equal(42.6977);
     expect(res.body.lon).to.equal(23.3219);
+  });
+
+  test("elevation is returned", function() {
+    expect(res.body.elevation).to.be.a("number");
+  });
+
+  test("elevation is returned", function() {
+    expect(res.body.elevation).to.be.a("number");
   });
 
   test("category_id matches", function() {

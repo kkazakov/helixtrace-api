@@ -3,13 +3,17 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/google/uuid"
+	"github.com/wasp/helixtrace-api/internal/config"
 	"github.com/wasp/helixtrace-api/internal/models"
 )
 
@@ -28,12 +32,12 @@ func EmailFromContext(ctx context.Context) (string, bool) {
 
 type PointHandler struct {
 	Conn clickhouse.Conn
+	Cfg  *config.Config
 }
 
 type createPointRequest struct {
 	Lat        float64 `json:"lat"`
 	Lon        float64 `json:"lon"`
-	Elevation  float64 `json:"elevation"`
 	Public     bool    `json:"public"`
 	Label      string  `json:"label"`
 	CategoryID uint8   `json:"category_id"`
@@ -100,13 +104,19 @@ func (h *PointHandler) CreatePoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	elevation, err := h.fetchElevation(r.Context(), req.Lat, req.Lon)
+	if err != nil {
+		WriteError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch elevation: %v", err))
+		return
+	}
+
 	id := uuid.New().String()
 	now := time.Now().UTC()
 
 	err = h.Conn.Exec(r.Context(), `
 		INSERT INTO points (id, lat, lon, elevation, user, public, label, category_id, deleted, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, false, ?)
-	`, id, req.Lat, req.Lon, req.Elevation, email, req.Public, req.Label, req.CategoryID, now)
+	`, id, req.Lat, req.Lon, elevation, email, req.Public, req.Label, req.CategoryID, now)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to create point")
 		return
@@ -116,11 +126,38 @@ func (h *PointHandler) CreatePoint(w http.ResponseWriter, r *http.Request) {
 		ID:         id,
 		Lat:        req.Lat,
 		Lon:        req.Lon,
-		Elevation:  req.Elevation,
+		Elevation:  elevation,
 		Public:     req.Public,
 		Label:      req.Label,
 		CategoryID: req.CategoryID,
 	})
+}
+
+func (h *PointHandler) fetchElevation(ctx context.Context, lat, lon float64) (float64, error) {
+	baseURL := strings.TrimSuffix(h.Cfg.OpenTopoDataServer, "/")
+	reqURL := fmt.Sprintf("%s?locations=%.7f,%.7f", baseURL, lat, lon)
+
+	resp, err := http.Get(reqURL)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	var topoResp OpenTopoResponse
+	if err := json.Unmarshal(body, &topoResp); err != nil {
+		return 0, err
+	}
+
+	if topoResp.Status != "OK" || len(topoResp.Results) == 0 {
+		return 0, fmt.Errorf("elevation service error: %s", topoResp.Status)
+	}
+
+	return math.Round(topoResp.Results[0].Elevation*100) / 100, nil
 }
 
 func (h *PointHandler) UpdatePoint(w http.ResponseWriter, r *http.Request) {
