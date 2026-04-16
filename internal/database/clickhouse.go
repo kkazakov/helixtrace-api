@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -48,10 +49,21 @@ func InitDB(conn clickhouse.Conn, sqlDir string) error {
 			return fmt.Errorf("failed to read %s: %w", f, err)
 		}
 
-		statements := strings.Split(string(content), ";")
+		var cleaned strings.Builder
+		scanner := bufio.NewScanner(strings.NewReader(string(content)))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "--") {
+				continue
+			}
+			cleaned.WriteString(line)
+			cleaned.WriteString(" ")
+		}
+
+		statements := strings.Split(cleaned.String(), ";")
 		for _, stmt := range statements {
 			stmt = strings.TrimSpace(stmt)
-			if stmt == "" || strings.HasPrefix(stmt, "--") {
+			if stmt == "" {
 				continue
 			}
 
