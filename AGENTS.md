@@ -14,9 +14,9 @@
 ## Architecture
 - `internal/config/` — env loading via `godotenv`, no `.env` file = silent fallback to defaults
 - `internal/database/` — ClickHouse connect + **migrations run at startup** from `sql/*.sql` (sorted alphabetically, split on `;`)
-- `internal/handlers/` — auth handlers (login, register), trace path handler, JSON helpers
-- `internal/middleware/` — Bearer token auth middleware
-- `internal/models/` — User/Token structs with `ch:` tags
+- `internal/handlers/` — auth handlers (login, register), trace path handler, point CRUD handlers, JSON helpers, context helpers
+- `internal/middleware/` — Bearer token auth middleware (uses `handlers.ContextWithEmail`)
+- `internal/models/` — User/Token/Point/PointCategory structs with `ch:` tags
 - `sql/` — numbered migration files; `001_users.sql` seeds admin user
 
 ## Routes
@@ -28,6 +28,16 @@
 | GET | `/api/health` | No | Health check |
 | GET | `/api/profile` | Yes | Get authenticated user email |
 | GET | `/api/trace-path` | Yes | Get elevation profile between two coordinates |
+| POST | `/api/point` | Yes | Create a new point |
+| PUT | `/api/point/{id}` | Yes | Update a point by ID |
+| DELETE | `/api/point/{id}` | Yes | Soft-delete a point |
+| GET | `/api/points` | Yes | List user's points (?include_public=true) |
+| GET | `/api/point-categories` | Yes | List available point categories |
+| POST | `/api/point` | Yes | Create a new point |
+| PUT | `/api/point/{id}` | Yes | Update a point by ID |
+| DELETE | `/api/point/{id}` | Yes | Soft-delete a point |
+| GET | `/api/points` | Yes | List user's points (?include_public=true) |
+| GET | `/api/point-categories` | Yes | List available point categories |
 
 ### Trace Path Endpoint
 `GET /api/trace-path?from=lat,lon&to=lat,lon`
@@ -40,8 +50,36 @@
 
 ## Auth Flow
 - Bearer token auth; tokens are random hex strings stored in ClickHouse `tokens` table (24h TTL)
-- `users` and `tokens` tables use `ReplacingMergeTree` — queries must include `FINAL`
+- `users`, `tokens`, `points`, and `point_categories` tables use `ReplacingMergeTree` — queries must include `FINAL`
 - Protected routes wrapped in `r.Group()` with auth middleware
+- Email extracted from context via `handlers.EmailFromContext(r.Context())`
+
+## Points
+
+### Tables
+- **`point_categories`** — `ReplacingMergeTree(updated_at)`, ORDER BY `(id)`. Seed categories: `poi`(1), `repeater`(2), `unknown`(3).
+- **`points`** — `ReplacingMergeTree(updated_at)`, ORDER BY `(user, id)`. Soft deletes via `deleted` flag.
+
+### Schema
+| Column | Type | Codec | Description |
+|--------|------|-------|-------------|
+| `id` | UUID | ZSTD(1) | UUIDv4 |
+| `lat` | Float64 | ZSTD(1) | Latitude |
+| `lon` | Float64 | ZSTD(1) | Longitude |
+| `elevation` | Float64 | Delta, ZSTD(1) | Elevation in meters |
+| `user` | String | ZSTD(1) | Owner email |
+| `public` | Bool | — | Visibility flag, default false |
+| `label` | String | ZSTD(1) | User-defined label |
+| `category_id` | UInt8 | LZ4 | FK to `point_categories.id` |
+| `deleted` | Bool | — | Soft delete flag, default false |
+| `updated_at` | DateTime64 | Delta, ZSTD(1) | Row version for ReplacingMergeTree |
+
+### Behavior
+- **Create** — validates `category_id` exists, generates UUID, inserts row
+- **Update** — partial update via re-insert (ReplacingMergeTree pattern); only provided fields change
+- **Delete** — soft delete via re-insert with `deleted=true`; filtered out on reads
+- **List** — returns user's points; `?include_public=true` adds other users' public points
+- **Ownership** — UPDATE/DELETE verify point belongs to authenticated user
 
 ## Caching
 - `trace_paths` table uses `MergeTree` engine, ordered by `(path_hash, created_at)`
@@ -51,7 +89,7 @@
 - ClickHouse `count` column is `UInt32` — scan into `*uint32`, not `*int`
 
 ## Testing
-- Bruno API collection in `bruno/` (login, register, health, trace-path)
+- Bruno API collection in `bruno/` (login, register, health, trace-path, points)
 - No Go tests exist yet; no linter/formatter configured
 
 ## Key Env Vars

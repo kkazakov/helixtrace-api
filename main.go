@@ -47,6 +47,7 @@ func main() {
 
 	authHandler := &handlers.AuthHandler{Conn: conn}
 	tracePathHandler := &handlers.TracePathHandler{Conn: conn, Cfg: cfg}
+	pointHandler := &handlers.PointHandler{Conn: conn}
 
 	r.Post("/api/login", authHandler.Login)
 	r.Post("/api/register", authHandler.Register)
@@ -63,11 +64,17 @@ func main() {
 		})
 
 		r.Get("/api/profile", func(w http.ResponseWriter, r *http.Request) {
-			email, _ := authmiddleware.EmailFromContext(r.Context())
+			email, _ := handlers.EmailFromContext(r.Context())
 			handlers.WriteJSON(w, http.StatusOK, map[string]string{"email": email})
 		})
 
 		r.Get("/api/trace-path", tracePathHandler.TracePath)
+
+		r.Post("/api/point", pointHandler.CreatePoint)
+		r.Put("/api/point/{id}", pointHandler.UpdatePoint)
+		r.Delete("/api/point/{id}", pointHandler.DeletePoint)
+		r.Get("/api/points", pointHandler.ListPoints)
+		r.Get("/api/point-categories", pointHandler.ListCategories)
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.APIHost, cfg.APIPort)

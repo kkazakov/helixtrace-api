@@ -1,0 +1,29 @@
+meta {
+  name: List Points
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api/points
+  body: none
+  auth: bearer
+}
+
+params:query {
+  include_public: false
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("response is array", function() {
+    expect(res.body).to.be.an("array");
+  });
+}

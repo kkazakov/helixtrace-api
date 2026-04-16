@@ -1,0 +1,45 @@
+meta {
+  name: Create Point
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/point
+  body: json
+  auth: bearer
+}
+
+body:json {
+  {
+    "lat": 42.6977,
+    "lon": 23.3219,
+    "elevation": 550.5,
+    "public": false,
+    "label": "Sofia office",
+    "category_id": 1
+  }
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("id is returned", function() {
+    expect(res.body.id).to.be.a("string").and.to.have.length.greaterThan(0);
+  });
+
+  test("lat/lon match request", function() {
+    expect(res.body.lat).to.equal(42.6977);
+    expect(res.body.lon).to.equal(23.3219);
+  });
+
+  test("category_id matches", function() {
+    expect(res.body.category_id).to.equal(1);
+  });
+}

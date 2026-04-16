@@ -34,6 +34,50 @@ Returns elevation data for interpolated points between two coordinates. Results 
 GET /api/health
 ```
 
+### Points
+
+Manage user-defined geographic points with elevation, labels, and categories.
+
+```
+POST /api/point        → Create a new point
+PUT /api/point/{id}    → Update a point by ID
+DELETE /api/point/{id} → Soft-delete a point
+GET /api/points        → List user's points (?include_public=true for public points too)
+GET /api/point-categories → List available point categories
+```
+
+#### Create Point
+```json
+POST /api/point
+{
+  "lat": 42.6977,
+  "lon": 23.3219,
+  "elevation": 550.5,
+  "public": false,
+  "label": "Sofia office",
+  "category_id": 1
+}
+```
+
+#### Update Point
+```json
+PUT /api/point/{id}
+{
+  "label": "Updated label",
+  "public": true
+}
+```
+Only provided fields are updated; omitted fields retain their current values.
+
+#### List Points
+```
+GET /api/points?include_public=true
+```
+Without `include_public`, returns only the authenticated user's points. With `include_public=true`, also includes other users' public points.
+
+#### Categories
+Seed categories: `poi` (1), `repeater` (2), `unknown` (3).
+
 ## Configuration
 
 | Variable | Default | Description |

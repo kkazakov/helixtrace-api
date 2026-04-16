@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -34,20 +33,7 @@ func AuthMiddleware(conn clickhouse.Conn, next http.HandlerFunc) http.HandlerFun
 		}
 
 		ctx := r.Context()
-		ctx = ContextWithEmail(ctx, email)
+		ctx = handlers.ContextWithEmail(ctx, email)
 		next(w, r.WithContext(ctx))
 	}
-}
-
-type contextKey string
-
-const emailKey contextKey = "email"
-
-func ContextWithEmail(ctx context.Context, email string) context.Context {
-	return context.WithValue(ctx, emailKey, email)
-}
-
-func EmailFromContext(ctx context.Context) (string, bool) {
-	email, ok := ctx.Value(emailKey).(string)
-	return email, ok
 }

@@ -1,0 +1,25 @@
+meta {
+  name: Delete Point
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{base_url}}/api/point/{{point_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("status is deleted", function() {
+    expect(res.body.status).to.equal("deleted");
+  });
+}
