@@ -81,6 +81,7 @@ func main() {
 		r.Get("/api/trace-path", tracePathHandler.TracePath)
 
 		r.Post("/api/point", pointHandler.CreatePoint)
+		r.Get("/api/point/{id}", pointHandler.GetPoint)
 		r.Put("/api/point/{id}", pointHandler.UpdatePoint)
 		r.Delete("/api/point/{id}", pointHandler.DeletePoint)
 		r.Get("/api/points", pointHandler.ListPoints)

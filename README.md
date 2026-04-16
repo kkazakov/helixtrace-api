@@ -40,6 +40,7 @@ Manage user-defined geographic points with elevation, labels, and categories.
 
 ```
 POST /api/point        → Create a new point
+GET /api/point/{id}    → Get point details by ID
 PUT /api/point/{id}    → Update a point by ID
 DELETE /api/point/{id} → Soft-delete a point
 GET /api/points        → List user's points (?include_public=true for public points too)
@@ -56,6 +57,28 @@ POST /api/point
   "public": false,
   "label": "Sofia office",
   "category_id": 1
+}
+```
+
+#### Get Point
+```
+GET /api/point/{id}
+```
+
+Returns full details of a point including the `user` (owner email).
+
+```json
+{
+  "data": {
+    "id": "f6271fdd-95ce-4520-81da-eecac0f6039d",
+    "lat": 42.661232,
+    "lon": 23.147163,
+    "elevation": 948.84,
+    "public": true,
+    "label": "аааа 2",
+    "category_id": 2,
+    "user": "kkazakov@gmail.com"
+  }
 }
 ```
 

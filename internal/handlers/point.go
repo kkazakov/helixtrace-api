@@ -62,6 +62,21 @@ type pointResponse struct {
 	CategoryID uint8   `json:"category_id"`
 }
 
+type pointDetailResponse struct {
+	ID         string  `json:"id"`
+	Lat        float64 `json:"lat"`
+	Lon        float64 `json:"lon"`
+	Elevation  float64 `json:"elevation"`
+	Public     bool    `json:"public"`
+	Label      string  `json:"label"`
+	CategoryID uint8   `json:"category_id"`
+	User       string  `json:"user"`
+}
+
+type dataResponse struct {
+	Data any `json:"data"`
+}
+
 func (h *PointHandler) CreatePoint(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -303,6 +318,43 @@ func (h *PointHandler) DeletePoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *PointHandler) GetPoint(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		WriteError(w, http.StatusBadRequest, "point id is required")
+		return
+	}
+
+	email, _ := EmailFromContext(r.Context())
+
+	var point models.Point
+	err := h.Conn.QueryRow(r.Context(), `
+		SELECT id, lat, lon, elevation, user, public, label, category_id, deleted
+		FROM points FINAL
+		WHERE id = ? AND user = ? AND deleted = false
+	`, id, email).Scan(
+		&point.ID, &point.Lat, &point.Lon, &point.Elevation,
+		&point.User, &point.Public, &point.Label, &point.CategoryID, &point.Deleted,
+	)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, "point not found")
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, dataResponse{
+		Data: pointDetailResponse{
+			ID:         point.ID,
+			Lat:        point.Lat,
+			Lon:        point.Lon,
+			Elevation:  point.Elevation,
+			Public:     point.Public,
+			Label:      point.Label,
+			CategoryID: point.CategoryID,
+			User:       point.User,
+		},
+	})
 }
 
 func (h *PointHandler) ListPoints(w http.ResponseWriter, r *http.Request) {
