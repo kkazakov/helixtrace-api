@@ -17,7 +17,7 @@ Server listens on `0.0.0.0:8000`.
 ### Authentication
 ```
 POST /api/login    → { "email": "...", "password": "..." }
-POST /api/register → { "email": "...", "password": "...", "username": "..." }
+POST /api/register → { "email": "...", "password": "..." }
 ```
 
 Returns a bearer token used in `Authorization: Bearer <token>` for protected routes.

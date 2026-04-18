@@ -26,7 +26,6 @@ type loginRequest struct {
 type registerRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	Username string `json:"username"`
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -109,8 +108,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" || req.Password == "" || req.Username == "" {
-		WriteError(w, http.StatusBadRequest, "email, password, and username are required")
+	if req.Email == "" || req.Password == "" {
+		WriteError(w, http.StatusBadRequest, "email and password are required")
 		return
 	}
 
@@ -137,7 +136,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err := h.Conn.Exec(r.Context(), `
 		INSERT INTO users (email, password_hash, username, active, access_rights, updated_at)
 		VALUES (?, ?, ?, true, '', ?)
-	`, req.Email, string(hashedPassword), req.Username, now); err != nil {
+	`, req.Email, string(hashedPassword), req.Email, now); err != nil {
 		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create user: %v", err))
 		return
 	}
@@ -160,7 +159,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusCreated, RegisterResponse{
 		Token:    token,
 		Email:    req.Email,
-		Username: req.Username,
+		Username: req.Email,
 	})
 }
 
