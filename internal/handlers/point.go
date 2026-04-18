@@ -402,6 +402,55 @@ func (h *PointHandler) ListPoints(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, points)
 }
 
+type pointInfoResponse struct {
+	Lat       float64 `json:"lat"`
+	Lon       float64 `json:"lon"`
+	Elevation float64 `json:"elevation"`
+}
+
+func (h *PointHandler) GetPointInfo(w http.ResponseWriter, r *http.Request) {
+	latStr := r.URL.Query().Get("lat")
+	lonStr := r.URL.Query().Get("lon")
+
+	if latStr == "" || lonStr == "" {
+		WriteError(w, http.StatusBadRequest, "lat and lon query parameters are required")
+		return
+	}
+
+	var lat, lon float64
+	if _, err := fmt.Sscanf(latStr, "%f", &lat); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid lat parameter")
+		return
+	}
+	if _, err := fmt.Sscanf(lonStr, "%f", &lon); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid lon parameter")
+		return
+	}
+
+	if lat < -90 || lat > 90 {
+		WriteError(w, http.StatusBadRequest, "latitude must be between -90 and 90")
+		return
+	}
+	if lon < -180 || lon > 180 {
+		WriteError(w, http.StatusBadRequest, "longitude must be between -180 and 180")
+		return
+	}
+
+	elevation, err := h.fetchElevation(r.Context(), lat, lon)
+	if err != nil {
+		WriteError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch elevation: %v", err))
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, dataResponse{
+		Data: pointInfoResponse{
+			Lat:       lat,
+			Lon:       lon,
+			Elevation: elevation,
+		},
+	})
+}
+
 func (h *PointHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.Conn.Query(r.Context(), `
 		SELECT id, name FROM point_categories FINAL ORDER BY id

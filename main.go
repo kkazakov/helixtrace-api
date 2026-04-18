@@ -86,6 +86,7 @@ func main() {
 		r.Delete("/api/point/{id}", pointHandler.DeletePoint)
 		r.Get("/api/points", pointHandler.ListPoints)
 		r.Get("/api/point-categories", pointHandler.ListCategories)
+		r.Get("/api/point/info", pointHandler.GetPointInfo)
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.APIHost, cfg.APIPort)

@@ -45,6 +45,7 @@ PUT /api/point/{id}    → Update a point by ID
 DELETE /api/point/{id} → Soft-delete a point
 GET /api/points        → List user's points (?include_public=true for public points too)
 GET /api/point-categories → List available point categories
+GET /api/point/info    → Get elevation for a coordinate (?lat=&lon=)
 ```
 
 #### Create Point
@@ -100,6 +101,40 @@ Without `include_public`, returns only the authenticated user's points. With `in
 
 #### Categories
 Seed categories: `poi` (1), `repeater` (2), `unknown` (3).
+
+#### Get Point Info
+```
+GET /api/point/info?lat=42.6977&lon=23.3219
+```
+
+Returns the elevation at the specified coordinates from the OpenTopoData service.
+
+```json
+{
+  "data": {
+    "lat": 42.6977,
+    "lon": 23.3219,
+    "elevation": 550.5
+  }
+}
+```
+
+#### Get Point Info
+```
+GET /api/point/info?lat=42.6977&lon=23.3219
+```
+
+Returns the elevation at the specified coordinates from the OpenTopoData service.
+
+```json
+{
+  "data": {
+    "lat": 42.6977,
+    "lon": 23.3219,
+    "elevation": 550.5
+  }
+}
+```
 
 ## Configuration
 
