@@ -80,13 +80,13 @@ func main() {
 
 		r.Get("/api/trace-path", tracePathHandler.TracePath)
 
+		r.Get("/api/point/info", pointHandler.GetPointInfo)
 		r.Post("/api/point", pointHandler.CreatePoint)
 		r.Get("/api/point/{id}", pointHandler.GetPoint)
 		r.Put("/api/point/{id}", pointHandler.UpdatePoint)
 		r.Delete("/api/point/{id}", pointHandler.DeletePoint)
 		r.Get("/api/points", pointHandler.ListPoints)
 		r.Get("/api/point-categories", pointHandler.ListCategories)
-		r.Get("/api/point/info", pointHandler.GetPointInfo)
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.APIHost, cfg.APIPort)
