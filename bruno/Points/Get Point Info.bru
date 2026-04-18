@@ -5,18 +5,18 @@ meta {
 }
 
 get {
-  url: {{base_url}}/api/point/info
+  url: {{base_url}}/api/point/info?lat=42.6977&lon=23.1245
   body: none
   auth: bearer
 }
 
-auth:bearer {
-  token: {{auth_token}}
-}
-
 params:query {
   lat: 42.6977
-  lon: 23.3219
+  lon: 23.1245
+}
+
+auth:bearer {
+  token: {{auth_token}}
 }
 
 tests {
