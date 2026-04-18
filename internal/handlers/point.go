@@ -70,7 +70,7 @@ type pointDetailResponse struct {
 	Public     bool    `json:"public"`
 	Label      string  `json:"label"`
 	CategoryID uint8   `json:"category_id"`
-	User       string  `json:"user"`
+	User       string  `json:"user,omitempty"`
 }
 
 type dataResponse struct {
@@ -333,7 +333,7 @@ func (h *PointHandler) GetPoint(w http.ResponseWriter, r *http.Request) {
 	err := h.Conn.QueryRow(r.Context(), `
 		SELECT id, lat, lon, elevation, user, public, label, category_id, deleted
 		FROM points FINAL
-		WHERE id = ? AND user = ? AND deleted = false
+		WHERE id = ? AND deleted = false AND (user = ? OR public = true)
 	`, id, email).Scan(
 		&point.ID, &point.Lat, &point.Lon, &point.Elevation,
 		&point.User, &point.Public, &point.Label, &point.CategoryID, &point.Deleted,
@@ -343,17 +343,21 @@ func (h *PointHandler) GetPoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resp := pointDetailResponse{
+		ID:         point.ID,
+		Lat:        point.Lat,
+		Lon:        point.Lon,
+		Elevation:  point.Elevation,
+		Public:     point.Public,
+		Label:      point.Label,
+		CategoryID: point.CategoryID,
+	}
+	if point.User == email {
+		resp.User = point.User
+	}
+
 	WriteJSON(w, http.StatusOK, dataResponse{
-		Data: pointDetailResponse{
-			ID:         point.ID,
-			Lat:        point.Lat,
-			Lon:        point.Lon,
-			Elevation:  point.Elevation,
-			Public:     point.Public,
-			Label:      point.Label,
-			CategoryID: point.CategoryID,
-			User:       point.User,
-		},
+		Data: resp,
 	})
 }
 
