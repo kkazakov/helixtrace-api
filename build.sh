@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
-go build -o helixtrace-api .
+docker compose build
 echo "Build complete: helixtrace-api"
