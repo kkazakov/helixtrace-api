@@ -118,7 +118,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		SELECT count() FROM users FINAL WHERE email = ?
 	`, req.Email).Scan(&existingCount)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to check user")
+		WriteError(w, http.StatusInternalServerError, "failed to check user: "+err.Error())
 		return
 	}
 	if existingCount > 0 {

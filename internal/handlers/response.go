@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -28,5 +29,6 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func WriteError(w http.ResponseWriter, status int, message string) {
+	log.Printf("ERROR %d: %s", status, message)
 	WriteJSON(w, status, ErrorResponse{Error: message})
 }
