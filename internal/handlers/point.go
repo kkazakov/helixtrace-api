@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"strings"
@@ -550,6 +551,7 @@ func (h *PointHandler) fetchMeshcoreRepeaters() []json.RawMessage {
 	// Fetch from external API
 	baseURL := strings.TrimSuffix(h.Cfg.MeshcoreDashboardAPI, "/")
 	reqURL := fmt.Sprintf("%s/api/repeaters/companion", baseURL)
+	log.Printf("[meshcore] fetching repeaters from %s", reqURL)
 
 	resp, err := http.Get(reqURL)
 	if err != nil {
