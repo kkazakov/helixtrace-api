@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -76,6 +77,38 @@ type pointDetailResponse struct {
 type dataResponse struct {
 	Data any `json:"data"`
 }
+
+type meshcoreRepeaterResponse struct {
+	Status    string             `json:"status"`
+	Repeaters []meshcoreRepeater `json:"repeaters"`
+}
+
+type meshcoreRepeater struct {
+	Name      string `json:"name"`
+	PublicKey string `json:"public_key"`
+	LastHeard string `json:"last_heard"`
+	Lat       string `json:"lat"`
+	Lon       string `json:"lon"`
+}
+
+type externalPointResponse struct {
+	ID       string  `json:"id"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	Public   bool    `json:"public"`
+	External bool    `json:"external"`
+	Label    string  `json:"label"`
+}
+
+type cacheEntry struct {
+	data      []byte
+	fetchedAt time.Time
+}
+
+var (
+	meshcoreCache    sync.Map
+	meshcoreCacheTTL = 5 * time.Minute
+)
 
 func (h *PointHandler) CreatePoint(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
@@ -364,6 +397,7 @@ func (h *PointHandler) GetPoint(w http.ResponseWriter, r *http.Request) {
 func (h *PointHandler) ListPoints(w http.ResponseWriter, r *http.Request) {
 	email, _ := EmailFromContext(r.Context())
 	includePublic := r.URL.Query().Get("include_public") == "true"
+	includeMeshcore := r.URL.Query().Get("include_meshcore_dashboard") == "true"
 
 	var rows driver.Rows
 	var err error
@@ -401,6 +435,21 @@ func (h *PointHandler) ListPoints(w http.ResponseWriter, r *http.Request) {
 
 	if points == nil {
 		points = []pointResponse{}
+	}
+
+	if includeMeshcore && h.Cfg.MeshcoreDashboardAPI != "" {
+		extPoints := h.fetchMeshcoreRepeaters()
+		result := make([]any, 0, len(points)+len(extPoints))
+		for _, p := range points {
+			result = append(result, p)
+		}
+		for _, ep := range extPoints {
+			var raw any
+			json.Unmarshal(ep, &raw)
+			result = append(result, raw)
+		}
+		WriteJSON(w, http.StatusOK, result)
+		return
 	}
 
 	WriteJSON(w, http.StatusOK, points)
@@ -480,4 +529,93 @@ func (h *PointHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, categories)
+}
+
+func (h *PointHandler) fetchMeshcoreRepeaters() []json.RawMessage {
+	now := time.Now().UTC()
+	cutoff := now.Add(-2 * 7 * 24 * time.Hour)
+
+	// Check cache first
+	if entry, ok := meshcoreCache.Load("meshcore_repeaters"); ok {
+		e := entry.(cacheEntry)
+		if now.Sub(e.fetchedAt) < meshcoreCacheTTL {
+			var resp meshcoreRepeaterResponse
+			if err := json.Unmarshal(e.data, &resp); err != nil {
+				return nil
+			}
+			return h.filterRepeaters(resp.Repeaters, cutoff)
+		}
+	}
+
+	// Fetch from external API
+	baseURL := strings.TrimSuffix(h.Cfg.MeshcoreDashboardAPI, "/")
+	reqURL := fmt.Sprintf("%s/api/repeaters/companion", baseURL)
+
+	resp, err := http.Get(reqURL)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
+	}
+
+	var apiResp meshcoreRepeaterResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil
+	}
+	if apiResp.Status != "ok" {
+		return nil
+	}
+
+	// Cache the raw response
+	meshcoreCache.Store("meshcore_repeaters", cacheEntry{
+		data:      body,
+		fetchedAt: now,
+	})
+
+	return h.filterRepeaters(apiResp.Repeaters, cutoff)
+}
+
+func (h *PointHandler) filterRepeaters(repeaters []meshcoreRepeater, cutoff time.Time) []json.RawMessage {
+	var result []json.RawMessage
+	for _, r := range repeaters {
+		lastHeard, err := time.Parse(time.RFC3339, r.LastHeard)
+		if err != nil {
+			continue
+		}
+		if lastHeard.Before(cutoff) {
+			continue
+		}
+
+		var latVal, lonVal float64
+		if _, err := fmt.Sscanf(r.Lat, "%f", &latVal); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(r.Lon, "%f", &lonVal); err != nil {
+			continue
+		}
+
+		ep := externalPointResponse{
+			ID:       r.PublicKey,
+			Lat:      latVal,
+			Lon:      lonVal,
+			Public:   true,
+			External: true,
+			Label:    r.Name,
+		}
+
+		raw, err := json.Marshal(ep)
+		if err != nil {
+			continue
+		}
+		result = append(result, raw)
+	}
+
+	if result == nil {
+		result = []json.RawMessage{}
+	}
+	return result
 }
