@@ -93,16 +93,25 @@ type meshcoreRepeater struct {
 }
 
 type externalPointResponse struct {
-	ID       string  `json:"id"`
-	Lat      float64 `json:"lat"`
-	Lon      float64 `json:"lon"`
-	Public   bool    `json:"public"`
-	External bool    `json:"external"`
-	Label    string  `json:"label"`
+	ID         string  `json:"id"`
+	Lat        float64 `json:"lat"`
+	Lon        float64 `json:"lon"`
+	Elevation  float64 `json:"elevation,omitempty"`
+	Public     bool    `json:"public"`
+	External   bool    `json:"external"`
+	Label      string  `json:"label"`
+	CategoryID uint8   `json:"category_id"`
+}
+
+type filteredRepeater struct {
+	Name string
+	ID   string
+	Lat  float64
+	Lon  float64
 }
 
 type cacheEntry struct {
-	data      []byte
+	data      []json.RawMessage
 	fetchedAt time.Time
 }
 
@@ -540,11 +549,7 @@ func (h *PointHandler) fetchMeshcoreRepeaters() []json.RawMessage {
 	if entry, ok := meshcoreCache.Load("meshcore_repeaters"); ok {
 		e := entry.(cacheEntry)
 		if now.Sub(e.fetchedAt) < meshcoreCacheTTL {
-			var resp meshcoreRepeaterResponse
-			if err := json.Unmarshal(e.data, &resp); err != nil {
-				return nil
-			}
-			return h.filterRepeaters(resp.Repeaters, cutoff)
+			return e.data
 		}
 	}
 
@@ -572,17 +577,50 @@ func (h *PointHandler) fetchMeshcoreRepeaters() []json.RawMessage {
 		return nil
 	}
 
-	// Cache the raw response
+	filtered := h.filterRepeaters(apiResp.Repeaters, cutoff)
+	if len(filtered) == 0 {
+		return []json.RawMessage{}
+	}
+
+	elevations := h.fetchElevationsBatched(filtered)
+
+	var result []json.RawMessage
+	for i, fr := range filtered {
+		ep := externalPointResponse{
+			ID:         fr.ID,
+			Lat:        fr.Lat,
+			Lon:        fr.Lon,
+			Public:     true,
+			External:   true,
+			Label:      fr.Name,
+			CategoryID: 2,
+		}
+		if i < len(elevations) {
+			ep.Elevation = elevations[i]
+		}
+
+		raw, err := json.Marshal(ep)
+		if err != nil {
+			continue
+		}
+		result = append(result, raw)
+	}
+
+	if result == nil {
+		result = []json.RawMessage{}
+	}
+
+	// Cache the final JSON response
 	meshcoreCache.Store("meshcore_repeaters", cacheEntry{
-		data:      body,
+		data:      result,
 		fetchedAt: now,
 	})
 
-	return h.filterRepeaters(apiResp.Repeaters, cutoff)
+	return result
 }
 
-func (h *PointHandler) filterRepeaters(repeaters []meshcoreRepeater, cutoff time.Time) []json.RawMessage {
-	var result []json.RawMessage
+func (h *PointHandler) filterRepeaters(repeaters []meshcoreRepeater, cutoff time.Time) []filteredRepeater {
+	var result []filteredRepeater
 	for _, r := range repeaters {
 		lastHeard, err := time.Parse(time.RFC3339, r.LastHeard)
 		if err != nil {
@@ -600,24 +638,78 @@ func (h *PointHandler) filterRepeaters(repeaters []meshcoreRepeater, cutoff time
 			continue
 		}
 
-		ep := externalPointResponse{
-			ID:       r.PublicKey,
-			Lat:      latVal,
-			Lon:      lonVal,
-			Public:   true,
-			External: true,
-			Label:    r.Name,
-		}
-
-		raw, err := json.Marshal(ep)
-		if err != nil {
-			continue
-		}
-		result = append(result, raw)
-	}
-
-	if result == nil {
-		result = []json.RawMessage{}
+		result = append(result, filteredRepeater{
+			Name: r.Name,
+			ID:   r.PublicKey,
+			Lat:  latVal,
+			Lon:  lonVal,
+		})
 	}
 	return result
+}
+
+func (h *PointHandler) fetchElevationsBatched(repeaters []filteredRepeater) []float64 {
+	maxLocs := h.Cfg.OpenTopoDataMaxLocations
+	if maxLocs <= 0 {
+		maxLocs = 100
+	}
+
+	baseURL := strings.TrimSuffix(h.Cfg.OpenTopoDataServer, "/")
+
+	var allElevations []float64
+	for i := 0; i < len(repeaters); i += maxLocs {
+		end := i + maxLocs
+		if end > len(repeaters) {
+			end = len(repeaters)
+		}
+		batch := repeaters[i:end]
+
+		var locs []string
+		for _, p := range batch {
+			locs = append(locs, fmt.Sprintf("%.7f,%.7f", p.Lat, p.Lon))
+		}
+		reqURL := fmt.Sprintf("%s?locations=%s", baseURL, strings.Join(locs, "|"))
+
+		resp, err := http.Get(reqURL)
+		if err != nil {
+			log.Printf("[meshcore] elevation fetch error: %v", err)
+			for range batch {
+				allElevations = append(allElevations, 0)
+			}
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			log.Printf("[meshcore] elevation read error: %v", err)
+			for range batch {
+				allElevations = append(allElevations, 0)
+			}
+			continue
+		}
+
+		var topoResp OpenTopoResponse
+		if err := json.Unmarshal(body, &topoResp); err != nil {
+			log.Printf("[meshcore] elevation parse error: %v", err)
+			for range batch {
+				allElevations = append(allElevations, 0)
+			}
+			continue
+		}
+
+		if topoResp.Status != "OK" {
+			log.Printf("[meshcore] elevation service error: %s", topoResp.Status)
+			for range batch {
+				allElevations = append(allElevations, 0)
+			}
+			continue
+		}
+
+		for _, res := range topoResp.Results {
+			elv := math.Round(res.Elevation*100) / 100
+			allElevations = append(allElevations, elv)
+		}
+	}
+
+	return allElevations
 }
