@@ -1,0 +1,42 @@
+meta {
+  name: Trace Path
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/trace-path?from=42.4233664,23.0068696&to=42.6155078,23.2344979
+  body: none
+  auth: bearer
+}
+
+params:query {
+  from: 42.4233664,23.0068696
+  to: 42.6155078,23.2344979
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("status is ok", function() {
+    expect(res.body.status).to.equal("ok");
+  });
+  
+  test("points array exists and has items", function() {
+    expect(res.body.points).to.be.an("array");
+    expect(res.body.points).to.have.length.greaterThan(0);
+  });
+  
+  test("first point has lat, lng, elv", function() {
+    const point = res.body.points[0];
+    expect(point).to.have.property("lat");
+    expect(point).to.have.property("lng");
+    expect(point).to.have.property("elv");
+  });
+}

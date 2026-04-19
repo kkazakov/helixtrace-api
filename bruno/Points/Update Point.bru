@@ -1,0 +1,36 @@
+meta {
+  name: Update Point
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{base_url}}/api/point/{{point_id}}
+  body: json
+  auth: bearer
+}
+
+body:json {
+  {
+    "label": "Sofia office - updated",
+    "public": true
+  }
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("label updated", function() {
+    expect(res.body.label).to.equal("Sofia office - updated");
+  });
+
+  test("public flag updated", function() {
+    expect(res.body.public).to.equal(true);
+  });
+}

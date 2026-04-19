@@ -1,0 +1,48 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: helixtrace-api:latest
+    container_name: helixtrace-api
+    ports:
+      - "8000:8000"
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_DATABASE=helixtrace
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=tlZ98k3QR2ycsp
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - OPENTOPADATA_SERVER=https://opentopodata.drun.net/v1/eudem25m
+      - OPENTOPADATA_MAX_LOCATIONS=100
+      - TRACE_PATH_POINT_DISTANCE=50
+      - CORS_ALLOWED_ORIGINS=https://helixtrace.drun.net
+      - DEBUG=false
+    depends_on:
+      - clickhouse
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: helixtrace-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      - CLICKHOUSE_DB=helixtrace
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=tlZ98k3QR2ycsp
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./sql:/docker-entrypoint-initdb.d
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+
+volumes:
+  clickhouse_data:

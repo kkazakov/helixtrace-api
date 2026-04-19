@@ -1,0 +1,39 @@
+meta {
+  name: Get Point Info
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/api/point/info?lat=42.6977&lon=23.1245
+  body: none
+  auth: bearer
+}
+
+params:query {
+  lat: 42.6977
+  lon: 23.1245
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("data object exists", function() {
+    expect(res.body.data).to.be.an("object");
+  });
+  
+  test("lat/lon are numbers", function() {
+    expect(res.body.data.lat).to.be.a("number");
+    expect(res.body.data.lon).to.be.a("number");
+  });
+  
+  test("elevation is a number", function() {
+    expect(res.body.data.elevation).to.be.a("number");
+  });
+}

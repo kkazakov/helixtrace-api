@@ -1,0 +1,31 @@
+meta {
+  name: List Point Categories
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/api/point-categories
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("response is array with items", function() {
+    expect(res.body).to.be.an("array");
+    expect(res.body).to.have.length.greaterThan(0);
+  });
+
+  test("has poi category", function() {
+    const names = res.body.map(c => c.name);
+    expect(names).to.include("poi");
+  });
+}
