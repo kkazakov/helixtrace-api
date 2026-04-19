@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
-./build.sh
+go build
 ./helixtrace-api

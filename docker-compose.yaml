@@ -15,6 +15,11 @@ services:
       - CLICKHOUSE_PASSWORD=tlZ98k3QR2ycsp
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      - OPENTOPADATA_SERVER=https://opentopodata.drun.net/v1/eudem25m
+      - OPENTOPADATA_MAX_LOCATIONS=100
+      - TRACE_PATH_POINT_DISTANCE=50
+      - CORS_ALLOWED_ORIGINS=https://helixtrace.drun.net
+      - DEBUG=false
     depends_on:
       - clickhouse
     restart: unless-stopped

@@ -48,10 +48,11 @@ func main() {
 
 	if len(cfg.CorsAllowedOrigins) > 0 {
 		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins: cfg.CorsAllowedOrigins,
-			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-			MaxAge:         300,
+			AllowedOrigins:   cfg.CorsAllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+			AllowCredentials: true,
+			MaxAge:           300,
 		}))
 	}
 
