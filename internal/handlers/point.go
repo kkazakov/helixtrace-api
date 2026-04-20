@@ -117,7 +117,7 @@ type cacheEntry struct {
 
 var (
 	meshcoreCache    sync.Map
-	meshcoreCacheTTL = 5 * time.Minute
+	meshcoreCacheTTL = 1 * time.Hour
 )
 
 func (h *PointHandler) CreatePoint(w http.ResponseWriter, r *http.Request) {
