@@ -1,113 +1,64 @@
 # AGENTS.md — helixtrace-api
 
 ## Project
-- Go 1.26.2 module (`github.com/wasp/helixtrace-api`)
-- HTTP API using `go-chi/chi/v5` router, ClickHouse as the sole database
-- Entry point: `main.go`
 
-## Setup & Run
-1. Copy `.env.example` → `.env` (gitignored)
-2. Start ClickHouse: `docker compose -f docker/clickhouse/docker-compose.yaml up -d`
-3. Run: `./run.sh` (builds then runs) or `go run main.go`
-4. Server listens on `0.0.0.0:8000` by default
+Go 1.26.2 HTTP API (`go-chi/chi/v5`, ClickHouse) for elevation profiles and geographic point management. Always refer to this project as "helixtrace-api". Deep documentation lives in `docs/` — read it before making architectural changes.
+
+## Commands
+
+```bash
+./run.sh                          # build + run (default :8000)
+go run main.go                    # run without rebuilding
+go build                          # build only
+docker compose -f docker/clickhouse/docker-compose.yaml up -d   # start ClickHouse
+docker compose up -d --build      # full deploy (API + ClickHouse)
+```
+
+No Go tests or linter exist. API testing uses Bruno collection in `bruno/`.
 
 ## Architecture
-- `internal/config/` — env loading via `godotenv`, no `.env` file = silent fallback to defaults
-- `internal/database/` — ClickHouse connect + **migrations run at startup** from `sql/*.sql` (sorted alphabetically, split on `;`)
-- `internal/handlers/` — auth handlers (login, register), trace path handler, point CRUD handlers, JSON helpers, context helpers
-- `internal/middleware/` — Bearer token auth middleware (uses `handlers.ContextWithEmail`)
-- `internal/models/` — User/Token/Point/PointCategory structs with `ch:` tags
-- `sql/` — numbered migration files; `001_users.sql` seeds admin user
 
-## Routes
+- `main.go` — bootstrap: config → ClickHouse connect → migrations → chi routes → serve
+- `internal/config/` — env loading via godotenv; silent fallback if no `.env`
+- `internal/database/` — ClickHouse connection + migration runner (`sql/*.sql`, sorted, split on `;`)
+- `internal/handlers/` — auth, trace-path, point CRUD, JSON helpers, context helpers
+- `internal/middleware/` — Bearer token auth middleware
+- `internal/models/` — structs with `ch:` tags for ClickHouse column mapping
+- `sql/` — numbered idempotent migrations (`CREATE TABLE IF NOT EXISTS`)
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/login` | No | Authenticate user, returns bearer token |
-| POST | `/api/register` | No | Create new user account |
-| GET | `/api/health` | No | Health check |
-| GET | `/api/profile` | Yes | Get authenticated user email |
-| GET | `/api/trace-path` | Yes | Get elevation profile between two coordinates |
-| POST | `/api/point` | Yes | Create a new point |
-| PUT | `/api/point/{id}` | Yes | Update a point by ID |
-| DELETE | `/api/point/{id}` | Yes | Soft-delete a point |
-| GET | `/api/points` | Yes | List user's points (?include_public=true) |
-| GET | `/api/point-categories` | Yes | List available point categories |
-| POST | `/api/point` | Yes | Create a new point |
-| PUT | `/api/point/{id}` | Yes | Update a point by ID |
-| DELETE | `/api/point/{id}` | Yes | Soft-delete a point |
-| GET | `/api/points` | Yes | List user's points (?include_public=true) |
-| GET | `/api/point-categories` | Yes | List available point categories |
+Routes are defined in `main.go`. See `docs/reference/api.md` for full endpoint reference.
 
-### Trace Path Endpoint
-`GET /api/trace-path?from=lat,lon&to=lat,lon`
+## Conventions
 
-- Interpolates points between `from` and `to` at configured distance intervals
-- Fetches elevation data from OpenTopoData server (batched in chunks)
-- Caches results in ClickHouse `trace_paths` table (SHA256 hash of coordinates + config)
-- In-memory mutex prevents duplicate concurrent saves for same hash
-- Max 1000 points; if distance/config yields more, spacing is adjusted
+**All ReplacingMergeTree queries MUST use `FINAL`.** The tables `users`, `tokens`, `points`, `point_categories` use `ReplacingMergeTree`. Without `FINAL`, stale rows appear. The `trace_paths` table is plain `MergeTree` — no `FINAL` needed there.
 
-## Auth Flow
-- Bearer token auth; tokens are random hex strings stored in ClickHouse `tokens` table (24h TTL)
-- `users`, `tokens`, `points`, and `point_categories` tables use `ReplacingMergeTree` — queries must include `FINAL`
-- Protected routes wrapped in `r.Group()` with auth middleware
-- Email extracted from context via `handlers.EmailFromContext(r.Context())`
+```go
+// Correct — FINAL required for ReplacingMergeTree
+SELECT * FROM points FINAL WHERE id = ? AND deleted = false
 
-## Points
+// Correct — no FINAL for plain MergeTree cache
+SELECT * FROM trace_paths WHERE path_hash = ? ORDER BY created_at DESC LIMIT 1
+```
 
-### Tables
-- **`point_categories`** — `ReplacingMergeTree(updated_at)`, ORDER BY `(id)`. Seed categories: `poi`(1), `repeater`(2), `unknown`(3).
-- **`points`** — `ReplacingMergeTree(updated_at)`, ORDER BY `(user, id)`. Soft deletes via `deleted` flag.
+**Updates are re-inserts, not ALTER.** The ClickHouse pattern is: read existing row, merge changes, INSERT with same ID and newer `updated_at`. Soft deletes re-insert with `deleted = true`.
 
-### Schema
-| Column | Type | Codec | Description |
-|--------|------|-------|-------------|
-| `id` | UUID | ZSTD(1) | UUIDv4 |
-| `lat` | Float64 | ZSTD(1) | Latitude |
-| `lon` | Float64 | ZSTD(1) | Longitude |
-| `elevation` | Float64 | Delta, ZSTD(1) | Elevation in meters |
-| `user` | String | ZSTD(1) | Owner email |
-| `public` | Bool | — | Visibility flag, default false |
-| `label` | String | ZSTD(1) | User-defined label |
-| `category_id` | UInt8 | LZ4 | FK to `point_categories.id` |
-| `deleted` | Bool | — | Soft delete flag, default false |
-| `updated_at` | DateTime64 | Delta, ZSTD(1) | Row version for ReplacingMergeTree |
+**Partial updates use pointer types.** `*float64`, `*bool`, `*string` in request structs — nil means "don't change", non-nil means "override".
 
-### Behavior
-- **Create** — validates `category_id` exists, fetches elevation from OpenTopoData API using lat/lon, generates UUID, inserts row
-- **Update** — partial update via re-insert (ReplacingMergeTree pattern); only provided fields change
-- **Delete** — soft delete via re-insert with `deleted=true`; filtered out on reads
-- **List** — returns user's points; `?include_public=true` adds other users' public points
-- **Ownership** — UPDATE/DELETE verify point belongs to authenticated user
+**Get full documentation before architectural changes.** Read `docs/explanation/` component docs and `docs/explanation/architecture-overview.md` before modifying data flow, adding tables, or changing caching strategy.
 
-## Caching
-- `trace_paths` table uses `MergeTree` engine, ordered by `(path_hash, created_at)`
-- Cache key is SHA256 of `from_lat,from_lon,to_lat,to_lon,point_distance`
-- Lookup uses `ORDER BY created_at DESC LIMIT 1` (no `FINAL` needed)
-- Per-hash `sync.Mutex` via `sync.Map` prevents concurrent duplicate inserts
-- ClickHouse `count` column is `UInt32` — scan into `*uint32`, not `*int`
+## Boundaries
 
-## Testing
-- Bruno API collection in `bruno/` (login, register, health, trace-path, points)
-- No Go tests exist yet; no linter/formatter configured
-
-## Key Env Vars
-| Var | Default |
-|---|---|
-| `CLICKHOUSE_HOST` | `localhost` |
-| `CLICKHOUSE_PORT` | `9000` (native) |
-| `CLICKHOUSE_DATABASE` | `helixtrace` |
-| `CLICKHOUSE_USER` | `admin` |
-| `CLICKHOUSE_PASSWORD` | _(empty)_ |
-| `API_HOST` | `0.0.0.0` |
-| `API_PORT` | `8000` |
-| `OPENTOPADATA_SERVER` | `https://api.opentopodata.org/v1/` |
-| `OPENTOPADATA_MAX_LOCATIONS` | `100` |
-| `TRACE_PATH_POINT_DISTANCE` | `50` (meters) |
+- **NEVER** commit `.env` files or files containing credentials
+- **NEVER** run `ALTER TABLE DELETE` on any table — use the soft-delete re-insert pattern
+- **NEVER** remove `FINAL` from queries on `users`, `tokens`, `points`, `point_categories`
+- **NEVER** scan ClickHouse `UInt32` into `*int` — use `*uint32` (silent failure → cache misses)
+- **DO NOT** add new dependencies without explaining the rationale
+- **REQUIRE HUMAN CONFIRMATION** before: changing ClickHouse table engines, modifying migration files in `sql/`, adding new database tables
 
 ## Gotchas
-- ClickHouse must be running **before** starting the API; startup fails on connection error
-- Migrations are re-applied every startup (`CREATE TABLE IF NOT EXISTS`), so they are idempotent
-- Docker compose sets `CLICKHOUSE_PASSWORD=tlZ98k3QR2ycsp` — `.env` must match if using docker
-- ClickHouse `UInt32` columns must be scanned into `*uint32`, not `*int` — scan errors are silent but cause cache misses
+
+- ClickHouse must be running before the API starts — startup fails on connection error
+- `UInt32` scan type mismatch is silent (no panic) but causes trace path cache misses
+- Migrations run every startup and are idempotent — safe to restart, but don't add non-idempotent statements
+- The trace-path handler uses a `sync.Map` of per-hash `*sync.Mutex` — don't replace with a single global mutex (serializes all requests)
+- Docker compose and `.env.example` use different ClickHouse passwords — match them when switching environments
