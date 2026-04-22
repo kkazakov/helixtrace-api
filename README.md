@@ -1,152 +1,90 @@
 # Helixtrace API
 
-HTTP API for fetching elevation profiles between coordinates, backed by ClickHouse.
+HTTP API for fetching elevation profiles between coordinates and managing user-defined geographic points, backed by ClickHouse.
 
-## Quick Start
+See [PURPOSE.md](PURPOSE.md) for business context and constraints.
+
+## Build, Run, Test
+
+### Prerequisites
+- Go 1.26.2
+- ClickHouse server running (see Docker setup below)
+
+### Local Development
 
 ```bash
+# Copy environment configuration
 cp .env.example .env
+
+# Start ClickHouse
 docker compose -f docker/clickhouse/docker-compose.yaml up -d
+
+# Build and run
 ./run.sh
+# Or: go run main.go
 ```
 
-Server listens on `0.0.0.0:8000`.
+Server listens on `0.0.0.0:8000` by default.
 
-## API
+### Docker Deployment
 
-### Authentication
-```
-POST /api/login    → { "email": "...", "password": "..." }
-POST /api/register → { "email": "...", "password": "..." }
-```
-
-Returns a bearer token used in `Authorization: Bearer <token>` for protected routes.
-
-### Trace Path
-```
-GET /api/trace-path?from=42.4233664,23.0068696&to=42.4817369,23.0368781
+```bash
+# Build and start API + ClickHouse
+./deploy.sh
+# Or: docker compose up -d --build
 ```
 
-Returns elevation data for interpolated points between two coordinates. Results are cached in ClickHouse.
+### API Testing
 
-### Health
-```
-GET /api/health
-```
+Bruno collection in `bruno/` covers all endpoints: Auth, Points, Trace-Path.
 
-### Points
-
-Manage user-defined geographic points with elevation, labels, and categories.
+## Architecture at a Glance
 
 ```
-POST /api/point        → Create a new point
-GET /api/point/{id}    → Get point details by ID
-PUT /api/point/{id}    → Update a point by ID
-DELETE /api/point/{id} → Soft-delete a point
-GET /api/points        → List user's points (?include_public=true for public points too)
-GET /api/point-categories → List available point categories
-GET /api/point/info    → Get elevation for a coordinate (?lat=&lon=)
+Client --> [Helixtrace API] --> [ClickHouse]
+                      --> [OpenTopoData]
+                      --> [Meshcore Dashboard] (optional)
 ```
 
-#### Create Point
-```json
-POST /api/point
-{
-  "lat": 42.6977,
-  "lon": 23.3219,
-  "elevation": 550.5,
-  "public": false,
-  "label": "Sofia office",
-  "category_id": 1
-}
-```
+### Components
 
-#### Get Point
-```
-GET /api/point/{id}
-```
+| Component | Description |
+|---|---|
+| [Entry Point & Routing](docs/explanation/entry-point.md) | Bootstrap, chi router, middleware chain |
+| [Configuration](docs/explanation/configuration.md) | Environment variable loading |
+| [Database Layer](docs/explanation/database.md) | ClickHouse connection, migrations |
+| [Authentication](docs/explanation/authentication.md) | Login/register, Bearer token auth |
+| [Trace Path Handler](docs/explanation/trace-path.md) | Elevation profiles with caching |
+| [Points Handler](docs/explanation/points.md) | Point CRUD, meshcore integration |
+| [Models](docs/explanation/models.md) | Data structures |
 
-Returns full details of a point including the `user` (owner email).
+## Repository Map
 
-```json
-{
-  "data": {
-    "id": "f6271fdd-95ce-4520-81da-eecac0f6039d",
-    "lat": 42.661232,
-    "lon": 23.147163,
-    "elevation": 948.84,
-    "public": true,
-    "label": "аааа 2",
-    "category_id": 2,
-    "user": "kkazakov@gmail.com"
-  }
-}
-```
+| Path | Purpose |
+|---|---|
+| `main.go` | Application entry point, route definitions |
+| `internal/config/` | Environment variable loading |
+| `internal/database/` | ClickHouse connection, migration runner |
+| `internal/handlers/` | Auth, trace path, point handlers |
+| `internal/middleware/` | Bearer token auth middleware |
+| `internal/models/` | User, Token, Point, Category structs |
+| `sql/` | Numbered migration files (run at startup) |
+| `bruno/` | Bruno API collection for testing |
+| `docker/` | Docker Compose for ClickHouse dependency |
+| `docs/` | Documentation |
 
-#### Update Point
-```json
-PUT /api/point/{id}
-{
-  "label": "Updated label",
-  "public": true
-}
-```
-Only provided fields are updated; omitted fields retain their current values.
+## Tech Stack
 
-#### List Points
-```
-GET /api/points?include_public=true
-```
-Without `include_public`, returns only the authenticated user's points. With `include_public=true`, also includes other users' public points.
+- **Language:** Go 1.26.2
+- **Router:** go-chi/chi/v5
+- **Database:** ClickHouse (clickhouse-go/v2 driver)
+- **Auth:** Bearer tokens with bcrypt password hashing
+- **Elevation Data:** OpenTopoData API (configurable endpoint)
+- **Container:** Docker (multi-stage build, debian:bookworm-slim runtime)
 
-#### Categories
-Seed categories: `poi` (1), `repeater` (2), `unknown` (3).
+## Documentation
 
-#### Get Point Info
-```
-GET /api/point/info?lat=42.6977&lon=23.3219
-```
-
-Returns the elevation at the specified coordinates from the OpenTopoData service.
-
-```json
-{
-  "data": {
-    "lat": 42.6977,
-    "lon": 23.3219,
-    "elevation": 550.5
-  }
-}
-```
-
-#### Get Point Info
-```
-GET /api/point/info?lat=42.6977&lon=23.3219
-```
-
-Returns the elevation at the specified coordinates from the OpenTopoData service.
-
-```json
-{
-  "data": {
-    "lat": 42.6977,
-    "lon": 23.3219,
-    "elevation": 550.5
-  }
-}
-```
-
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `CLICKHOUSE_HOST` | `localhost` | ClickHouse host |
-| `CLICKHOUSE_PORT` | `9000` | ClickHouse native port |
-| `CLICKHOUSE_DATABASE` | `helixtrace` | Database name |
-| `CLICKHOUSE_USER` | `admin` | Database user |
-| `CLICKHOUSE_PASSWORD` | _(empty)_ | Database password |
-| `API_HOST` | `0.0.0.0` | Bind address |
-| `API_PORT` | `8000` | Bind port |
-| `OPENTOPADATA_SERVER` | `https://api.opentopodata.org/v1/` | Elevation API base URL |
-| `OPENTOPADATA_MAX_LOCATIONS` | `100` | Max locations per batch request |
-| `TRACE_PATH_POINT_DISTANCE` | `50` | Distance between points in meters |
+- [Documentation Index](docs/index.md) — Navigation hub
+- [Architecture Overview](docs/explanation/architecture-overview.md) — System context, data flows, cross-cutting concerns
+- [API Reference](docs/reference/api.md) — Endpoint descriptions, request/response schemas
+- [Architecture Decision Records](docs/architecture/adr/) — Key architectural choices
