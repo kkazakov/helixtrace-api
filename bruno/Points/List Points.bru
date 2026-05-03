@@ -5,13 +5,14 @@ meta {
 }
 
 get {
-  url: {{base_url}}/api/points
+  url: {{base_url}}/api/points?include_public=true&include_meshcore_dashboard=true
   body: none
   auth: bearer
 }
 
 params:query {
-  include_public: false
+  include_public: true
+  include_meshcore_dashboard: true
 }
 
 auth:bearer {
@@ -22,7 +23,7 @@ tests {
   test("status 200", function() {
     expect(res.status).to.equal(200);
   });
-
+  
   test("response is array", function() {
     expect(res.body).to.be.an("array");
   });

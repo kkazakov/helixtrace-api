@@ -21,6 +21,7 @@ type Config struct {
 	APIPort                  int
 	CorsAllowedOrigins       []string
 	Debug                    bool
+	MeshcoreDashboardAPI     string
 }
 
 func Load() (*Config, error) {
@@ -44,6 +45,7 @@ func Load() (*Config, error) {
 		APIPort:                  apiPort,
 		CorsAllowedOrigins:       parseCorsOrigins(getEnv("CORS_ALLOWED_ORIGINS", "")),
 		Debug:                    getEnv("DEBUG", "false") == "true",
+		MeshcoreDashboardAPI:     getEnv("MESHCORE_DASHBOARD_API", ""),
 	}, nil
 }
 
