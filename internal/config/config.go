@@ -25,6 +25,7 @@ type Config struct {
 	PhotonServer             string
 	GeocodeCacheTTLMinutes   int
 	GeocodeMaxResults        int
+	SearchInPoints           bool
 }
 
 func Load() (*Config, error) {
@@ -54,6 +55,7 @@ func Load() (*Config, error) {
 		PhotonServer:             getEnv("PHOTON_SERVER", "https://photon.komoot.io"),
 		GeocodeCacheTTLMinutes:   geocodeCacheTTL,
 		GeocodeMaxResults:        geocodeMaxResults,
+		SearchInPoints:           getEnv("SEARCH_IN_POINTS", "false") == "true",
 	}, nil
 }
 

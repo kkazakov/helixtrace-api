@@ -59,7 +59,7 @@ func main() {
 	authHandler := &handlers.AuthHandler{Conn: conn}
 	tracePathHandler := &handlers.TracePathHandler{Conn: conn, Cfg: cfg}
 	pointHandler := &handlers.PointHandler{Conn: conn, Cfg: cfg}
-	geocodeHandler := &handlers.GeocodeHandler{Cfg: cfg}
+	geocodeHandler := &handlers.GeocodeHandler{Conn: conn, Cfg: cfg}
 
 	r.Post("/api/login", authHandler.Login)
 	r.Post("/api/register", authHandler.Register)
