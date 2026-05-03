@@ -22,6 +22,9 @@ type Config struct {
 	CorsAllowedOrigins       []string
 	Debug                    bool
 	MeshcoreDashboardAPI     string
+	PhotonServer             string
+	GeocodeCacheTTLMinutes   int
+	GeocodeMaxResults        int
 }
 
 func Load() (*Config, error) {
@@ -31,6 +34,8 @@ func Load() (*Config, error) {
 	apiPort, _ := strconv.Atoi(getEnv("API_PORT", "8000"))
 	pointDistance, _ := strconv.ParseFloat(getEnv("TRACE_PATH_POINT_DISTANCE", "50"), 64)
 	maxLocations, _ := strconv.Atoi(getEnv("OPENTOPADATA_MAX_LOCATIONS", "100"))
+	geocodeCacheTTL, _ := strconv.Atoi(getEnv("GEOCODE_CACHE_TTL_MINUTES", "60"))
+	geocodeMaxResults, _ := strconv.Atoi(getEnv("GEOCODE_MAX_RESULTS", "50"))
 
 	return &Config{
 		OpenTopoDataServer:       getEnv("OPENTOPADATA_SERVER", "https://api.opentopodata.org/v1/"),
@@ -46,6 +51,9 @@ func Load() (*Config, error) {
 		CorsAllowedOrigins:       parseCorsOrigins(getEnv("CORS_ALLOWED_ORIGINS", "")),
 		Debug:                    getEnv("DEBUG", "false") == "true",
 		MeshcoreDashboardAPI:     getEnv("MESHCORE_DASHBOARD_API", ""),
+		PhotonServer:             getEnv("PHOTON_SERVER", "https://photon.komoot.io"),
+		GeocodeCacheTTLMinutes:   geocodeCacheTTL,
+		GeocodeMaxResults:        geocodeMaxResults,
 	}, nil
 }
 

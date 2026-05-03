@@ -59,6 +59,7 @@ func main() {
 	authHandler := &handlers.AuthHandler{Conn: conn}
 	tracePathHandler := &handlers.TracePathHandler{Conn: conn, Cfg: cfg}
 	pointHandler := &handlers.PointHandler{Conn: conn, Cfg: cfg}
+	geocodeHandler := &handlers.GeocodeHandler{Cfg: cfg}
 
 	r.Post("/api/login", authHandler.Login)
 	r.Post("/api/register", authHandler.Register)
@@ -88,6 +89,8 @@ func main() {
 		r.Delete("/api/point/{id}", pointHandler.DeletePoint)
 		r.Get("/api/points", pointHandler.ListPoints)
 		r.Get("/api/point-categories", pointHandler.ListCategories)
+
+		r.Get("/api/geocode", geocodeHandler.Geocode)
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.APIHost, cfg.APIPort)
