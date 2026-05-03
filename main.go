@@ -21,6 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	log.Printf("config loaded: SEARCH_IN_POINTS=%v", cfg.SearchInPoints)
 
 	conn, err := database.Connect(cfg)
 	if err != nil {
