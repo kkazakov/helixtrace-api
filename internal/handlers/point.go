@@ -577,12 +577,12 @@ func (h *PointHandler) fetchMeshcoreRepeaters() []json.RawMessage {
 		return nil
 	}
 
-	filtered := h.filterRepeaters(apiResp.Repeaters, cutoff)
+	filtered := filterRepeaters(apiResp.Repeaters, cutoff)
 	if len(filtered) == 0 {
 		return []json.RawMessage{}
 	}
 
-	elevations := h.fetchElevationsBatched(filtered)
+	elevations := fetchElevationsBatched(h.Cfg, filtered)
 
 	var result []json.RawMessage
 	for i, fr := range filtered {
@@ -619,7 +619,7 @@ func (h *PointHandler) fetchMeshcoreRepeaters() []json.RawMessage {
 	return result
 }
 
-func (h *PointHandler) filterRepeaters(repeaters []meshcoreRepeater, cutoff time.Time) []filteredRepeater {
+func filterRepeaters(repeaters []meshcoreRepeater, cutoff time.Time) []filteredRepeater {
 	var result []filteredRepeater
 	for _, r := range repeaters {
 		lastHeard, err := time.Parse(time.RFC3339, r.LastHeard)
@@ -648,13 +648,13 @@ func (h *PointHandler) filterRepeaters(repeaters []meshcoreRepeater, cutoff time
 	return result
 }
 
-func (h *PointHandler) fetchElevationsBatched(repeaters []filteredRepeater) []float64 {
-	maxLocs := h.Cfg.OpenTopoDataMaxLocations
+func fetchElevationsBatched(cfg *config.Config, repeaters []filteredRepeater) []float64 {
+	maxLocs := cfg.OpenTopoDataMaxLocations
 	if maxLocs <= 0 {
 		maxLocs = 100
 	}
 
-	baseURL := strings.TrimSuffix(h.Cfg.OpenTopoDataServer, "/")
+	baseURL := strings.TrimSuffix(cfg.OpenTopoDataServer, "/")
 
 	var allElevations []float64
 	for i := 0; i < len(repeaters); i += maxLocs {

@@ -164,9 +164,18 @@ func (h *GeocodeHandler) Geocode(w http.ResponseWriter, r *http.Request) {
 		local, err := h.searchLocalPoints(r.Context(), email, query)
 		if err != nil {
 			log.Printf("[geocode] local points search error: %v", err)
-		} else if len(local) > 0 {
-			results = append(local, results...)
 		}
+
+		meshcore, err := h.searchMeshcorePoints(query)
+		if err != nil {
+			log.Printf("[geocode] meshcore points search error: %v", err)
+		}
+
+		combined := make([]GeocodeResult, 0, len(local)+len(meshcore)+len(results))
+		combined = append(combined, local...)
+		combined = append(combined, meshcore...)
+		combined = append(combined, results...)
+		results = combined
 	}
 
 	if len(results) > limit {
@@ -217,6 +226,58 @@ func (h *GeocodeHandler) searchLocalPoints(ctx context.Context, email, query str
 			Lat:         lat,
 			Lon:         lon,
 			Type:        typ,
+		})
+	}
+	return results, nil
+}
+
+func (h *GeocodeHandler) searchMeshcorePoints(query string) ([]GeocodeResult, error) {
+	if h.Cfg.MeshcoreDashboardAPI == "" {
+		return nil, nil
+	}
+
+	baseURL := strings.TrimSuffix(h.Cfg.MeshcoreDashboardAPI, "/")
+	reqURL := fmt.Sprintf("%s/api/repeaters/companion", baseURL)
+
+	resp, err := http.Get(reqURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var apiResp meshcoreRepeaterResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, err
+	}
+	if apiResp.Status != "ok" {
+		return nil, fmt.Errorf("meshcore api status: %s", apiResp.Status)
+	}
+
+	now := time.Now().UTC()
+	cutoff := now.Add(-2 * 7 * 24 * time.Hour)
+	filtered := filterRepeaters(apiResp.Repeaters, cutoff)
+	if len(filtered) == 0 {
+		return []GeocodeResult{}, nil
+	}
+
+	qLower := strings.ToLower(query)
+	var results []GeocodeResult
+	for _, fr := range filtered {
+		if !strings.Contains(strings.ToLower(fr.Name), qLower) {
+			continue
+		}
+		results = append(results, GeocodeResult{
+			ID:          fr.ID,
+			Name:        fr.Name,
+			DisplayName: fr.Name,
+			Lat:         fr.Lat,
+			Lon:         fr.Lon,
+			Type:        "repeater",
 		})
 	}
 	return results, nil
