@@ -1,0 +1,41 @@
+meta {
+  name: Search
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/geocode?q=Berlin&limit=10
+  body: none
+  auth: bearer
+}
+
+params:query {
+  q: Berlin
+  limit: 10
+}
+
+auth:bearer {
+  token: {{auth_token}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("response has results array", function() {
+    expect(res.body).to.have.property("results");
+    expect(res.body.results).to.be.an("array");
+  });
+  
+  test("first result has required fields", function() {
+    const result = res.body.results[0];
+    expect(result).to.have.property("id");
+    expect(result).to.have.property("name");
+    expect(result).to.have.property("display_name");
+    expect(result).to.have.property("lat");
+    expect(result).to.have.property("lon");
+    expect(result).to.have.property("type");
+  });
+}

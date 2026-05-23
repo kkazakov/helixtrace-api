@@ -111,3 +111,17 @@
 - Migrations are re-applied every startup (`CREATE TABLE IF NOT EXISTS`), so they are idempotent
 - Docker compose sets `CLICKHOUSE_PASSWORD=tlZ98k3QR2ycsp` — `.env` must match if using docker
 - ClickHouse `UInt32` columns must be scanned into `*uint32`, not `*int` — scan errors are silent but cause cache misses
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues (uses `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo (`CONTEXT.md` + `docs/adr/` at the root). See `docs/agents/domain.md`.
